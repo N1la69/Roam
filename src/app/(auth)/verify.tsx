@@ -10,21 +10,35 @@ import {
   SafeAreaView,
   StatusBar,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, Href } from "expo-router";
+import { useSignIn, useSignUp } from "@clerk/expo";
 import { Feather } from "@expo/vector-icons";
 import { colors, fonts, spacing } from "@/theme";
-import { Button } from "@/components";
+import { Button, StatusAlert } from "@/components";
 
 export default function VerificationScreen() {
   const router = useRouter();
-  const { email } = useLocalSearchParams<{ email?: string }>();
+  const { email, flow = "sign-up" } = useLocalSearchParams<{
+    email?: string;
+    flow?: "sign-in" | "sign-up";
+  }>();
+
+  const { signIn, fetchStatus: signInFetchStatus } = useSignIn();
+  const { signUp, fetchStatus: signUpFetchStatus } = useSignUp();
+
   const [digits, setDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [focusedIndex, setFocusedIndex] = useState(0);
   const [countdown, setCountdown] = useState(45);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [resendSuccess, setResendSuccess] = useState(false);
 
   const canResend = countdown === 0;
+  const isFetching =
+    loading ||
+    signInFetchStatus === "fetching" ||
+    signUpFetchStatus === "fetching";
+
   const inputRefs = useRef<(React.ComponentRef<typeof TextInput> | null)[]>([]);
 
   // Countdown timer for resend
@@ -38,11 +52,12 @@ export default function VerificationScreen() {
 
   const handleDigitChange = (value: string, index: number) => {
     setErrorMsg("");
+    setResendSuccess(false);
     const newDigits = [...digits];
 
-    // Handle paste or single char
+    // Handle paste or multi-character input
     if (value.length > 1) {
-      const chars = value.slice(0, 6).split("");
+      const chars = value.replace(/\D/g, "").slice(0, 6).split("");
       chars.forEach((c, idx) => {
         if (idx < 6) newDigits[idx] = c;
       });
@@ -52,7 +67,7 @@ export default function VerificationScreen() {
       return;
     }
 
-    newDigits[index] = value;
+    newDigits[index] = value.replace(/\D/g, "");
     setDigits(newDigits);
 
     if (value && index < 5) {
@@ -69,26 +84,109 @@ export default function VerificationScreen() {
     }
   };
 
-  const handleVerify = () => {
-    const code = digits.join("");
+  const handleVerify = async () => {
+    const code = digits.join("").trim();
     if (code.length < 6) {
       setErrorMsg("Please enter the complete 6-digit code");
       return;
     }
 
+    setErrorMsg("");
+    setResendSuccess(false);
     setLoading(true);
-    setTimeout(() => {
+
+    try {
+      if (flow === "sign-in") {
+        const { error } = await signIn.emailCode.verifyCode({ code });
+
+        if (error) {
+          setLoading(false);
+          const msg =
+            error.longMessage ||
+            error.message ||
+            "Invalid verification code. Please try again.";
+          setErrorMsg(msg);
+          return;
+        }
+
+        if (signIn.status === "complete") {
+          await signIn.finalize({
+            navigate: ({ session }) => {
+              if (session?.currentTask) return;
+              router.replace("/(home)" as Href);
+            },
+          });
+        } else {
+          setLoading(false);
+          setErrorMsg(`Sign-in status: ${signIn.status}`);
+        }
+      } else {
+        // Sign-up flow
+        const { error } = await signUp.verifications.verifyEmailCode({ code });
+
+        if (error) {
+          setLoading(false);
+          const msg =
+            error.longMessage ||
+            error.message ||
+            "Invalid verification code. Please try again.";
+          setErrorMsg(msg);
+          return;
+        }
+
+        if (signUp.status === "complete") {
+          await signUp.finalize({
+            navigate: ({ session }) => {
+              if (session?.currentTask) return;
+              router.replace("/(home)" as Href);
+            },
+          });
+        } else {
+          setLoading(false);
+          setErrorMsg(`Sign-up status: ${signUp.status}`);
+        }
+      }
+    } catch (err: unknown) {
       setLoading(false);
-      // Mocked successful verification -> navigates to app
-      router.push("/design-system");
-    }, 600);
+      const e = err as Error;
+      setErrorMsg(e?.message || "Verification failed. Please try again.");
+    }
   };
 
-  const handleResend = () => {
-    if (!canResend) return;
-    setCountdown(45);
-    setDigits(["", "", "", "", "", ""]);
-    inputRefs.current[0]?.focus();
+  const handleResend = async () => {
+    if (!canResend || isFetching) return;
+    setErrorMsg("");
+    setResendSuccess(false);
+    setLoading(true);
+
+    try {
+      if (flow === "sign-in") {
+        const { error } = await signIn.emailCode.sendCode();
+        setLoading(false);
+        if (error) {
+          const msg = error.longMessage || error.message || "Failed to resend code";
+          setErrorMsg(msg);
+          return;
+        }
+      } else {
+        const { error } = await signUp.verifications.sendEmailCode();
+        setLoading(false);
+        if (error) {
+          const msg = error.longMessage || error.message || "Failed to resend code";
+          setErrorMsg(msg);
+          return;
+        }
+      }
+
+      setResendSuccess(true);
+      setCountdown(45);
+      setDigits(["", "", "", "", "", ""]);
+      inputRefs.current[0]?.focus();
+    } catch (err: unknown) {
+      setLoading(false);
+      const e = err as Error;
+      setErrorMsg(e?.message || "Failed to resend code. Please try again.");
+    }
   };
 
   const formatTimer = (seconds: number) => {
@@ -168,7 +266,7 @@ export default function VerificationScreen() {
                 letterSpacing: -0.8,
               }}
             >
-              {"Verify your\naccount"}
+              {"Enter confirmation\ncode"}
             </Text>
             <Text
               style={{
@@ -178,80 +276,117 @@ export default function VerificationScreen() {
                 color: colors.textSecondary,
               }}
             >
-              {`We sent a 6-digit verification code to `}
-              <Text style={{ fontFamily: fonts.semiBold, color: colors.textPrimary }}>
-                {email || "your email address"}
+              {"A 6-digit code was sent to "}
+              <Text
+                style={{
+                  fontFamily: fonts.semiBold,
+                  color: colors.textPrimary,
+                }}
+              >
+                {email || "your email"}
               </Text>
-              {`. Enter it below to complete your registration.`}
             </Text>
           </View>
 
-          {/* 6-Digit OTP Input Box Row */}
-          <View style={{ marginVertical: spacing.sm }}>
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                gap: 8,
-              }}
-            >
-              {digits.map((digit, idx) => {
-                const isFocused = focusedIndex === idx;
-                const isFilled = digit.length > 0;
+          {/* Status Alerts */}
+          {errorMsg ? (
+            <StatusAlert
+              type="error"
+              message={errorMsg}
+              onDismiss={() => setErrorMsg("")}
+            />
+          ) : null}
 
-                return (
-                  <TextInput
-                    key={idx}
-                    ref={(el) => {
-                      inputRefs.current[idx] = el;
-                    }}
-                    value={digit}
-                    onChangeText={(val) => handleDigitChange(val, idx)}
-                    onKeyPress={(e) => handleKeyPress(e, idx)}
-                    onFocus={() => setFocusedIndex(idx)}
-                    keyboardType="number-pad"
-                    maxLength={1}
-                    selectTextOnFocus
-                    style={{
-                      flex: 1,
-                      height: 56,
-                      borderRadius: 16,
-                      borderCurve: "continuous",
-                      backgroundColor: isFocused || isFilled ? colors.surface : colors.surfaceGray,
-                      borderWidth: 1.5,
-                      borderColor: isFocused ? colors.lavender : isFilled ? colors.border : "transparent",
-                      textAlign: "center",
-                      fontFamily: fonts.bold,
-                      fontSize: 22,
-                      color: colors.textPrimary,
-                    }}
-                  />
-                );
-              })}
-            </View>
+          {resendSuccess ? (
+            <StatusAlert
+              type="success"
+              message="A new 6-digit code has been sent to your email."
+              onDismiss={() => setResendSuccess(false)}
+            />
+          ) : null}
 
-            {errorMsg ? (
-              <Text
-                style={{
-                  fontFamily: fonts.medium,
-                  fontSize: 13,
-                  color: colors.error,
-                  marginTop: spacing.sm,
-                  textAlign: "center",
-                }}
-              >
-                {errorMsg}
-              </Text>
-            ) : null}
+          {/* 6 Digit Input Boxes */}
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              gap: 8,
+              marginVertical: spacing.sm,
+            }}
+          >
+            {digits.map((digit, index) => {
+              const isFocused = focusedIndex === index;
+              const isFilled = digit.length > 0;
+
+              return (
+                <TextInput
+                  key={index}
+                  ref={(ref) => {
+                    inputRefs.current[index] = ref;
+                  }}
+                  value={digit}
+                  onChangeText={(val) => handleDigitChange(val, index)}
+                  onKeyPress={(e) => handleKeyPress(e, index)}
+                  onFocus={() => setFocusedIndex(index)}
+                  keyboardType="number-pad"
+                  maxLength={index === 0 ? 6 : 1}
+                  selectTextOnFocus
+                  style={{
+                    flex: 1,
+                    height: 58,
+                    borderRadius: 16,
+                    borderWidth: isFocused ? 2 : 1,
+                    borderColor: isFocused
+                      ? colors.lavender
+                      : isFilled
+                      ? colors.textPrimary
+                      : colors.border,
+                    backgroundColor: colors.surfaceGray,
+                    textAlign: "center",
+                    fontSize: 22,
+                    fontFamily: fonts.bold,
+                    color: colors.textPrimary,
+                  }}
+                />
+              );
+            })}
           </View>
 
+          {/* Primary Action Button */}
+          <Button
+            title="Continue"
+            showArrow
+            onPress={handleVerify}
+            loading={isFetching}
+            disabled={isFetching || digits.join("").length < 6}
+            size="lg"
+          />
+
           {/* Resend Code Section */}
-          <View style={{ alignItems: "center", gap: 4 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "center",
+              alignItems: "center",
+              gap: 6,
+              marginTop: spacing.xs,
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: fonts.regular,
+                fontSize: 14,
+                color: colors.textSecondary,
+              }}
+            >
+              {"Didn't receive the code?"}
+            </Text>
             {canResend ? (
               <Pressable
                 accessibilityRole="button"
                 onPress={handleResend}
                 hitSlop={8}
+                disabled={isFetching}
               >
                 <Text
                   style={{
@@ -267,61 +402,14 @@ export default function VerificationScreen() {
             ) : (
               <Text
                 style={{
-                  fontFamily: fonts.regular,
+                  fontFamily: fonts.semiBold,
                   fontSize: 14,
                   color: colors.textSecondary,
                 }}
               >
-                {`Resend code in ${formatTimer(countdown)}`}
+                Resend in {formatTimer(countdown)}
               </Text>
             )}
-          </View>
-
-          {/* Primary Action Button */}
-          <Button
-            title="Verify and continue"
-            showArrow
-            onPress={handleVerify}
-            loading={loading}
-            size="lg"
-            style={{ marginTop: spacing.xs }}
-          />
-
-          {/* Footer Back link */}
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "center",
-              alignItems: "center",
-              gap: 4,
-              marginTop: spacing.xs,
-            }}
-          >
-            <Text
-              style={{
-                fontFamily: fonts.regular,
-                fontSize: 14,
-                color: colors.textSecondary,
-              }}
-            >
-              Wrong email address?
-            </Text>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => router.back()}
-              hitSlop={8}
-            >
-              <Text
-                style={{
-                  fontFamily: fonts.bold,
-                  fontSize: 14,
-                  color: colors.textPrimary,
-                  textDecorationLine: "underline",
-                }}
-              >
-                Change email
-              </Text>
-            </Pressable>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

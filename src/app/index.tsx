@@ -11,7 +11,8 @@ import {
   SafeAreaView,
   StatusBar,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, Redirect, Href } from "expo-router";
+import { useAuth } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, fonts, radius, spacing } from "@/theme";
 import { Button, GoogleIcon } from "@/components";
@@ -58,8 +59,17 @@ const SLIDES: OnboardingSlide[] = [
 
 export default function OnboardingScreen() {
   const router = useRouter();
+  const { isLoaded, isSignedIn } = useAuth();
   const [activeIndex, setActiveIndex] = useState(0);
   const flatListRef = useRef<FlatList<OnboardingSlide>>(null);
+
+  if (!isLoaded) {
+    return null;
+  }
+
+  if (isSignedIn) {
+    return <Redirect href={"/(home)" as Href} />;
+  }
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const offsetX = event.nativeEvent.contentOffset.x;

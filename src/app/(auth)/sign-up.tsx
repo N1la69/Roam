@@ -9,36 +9,125 @@ import {
   SafeAreaView,
   StatusBar,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, Href } from "expo-router";
+import { useSignUp } from "@clerk/expo";
 import { Feather } from "@expo/vector-icons";
 import { colors, fonts, spacing } from "@/theme";
-import { Button, StackedInputField, GoogleIcon, AppleIcon } from "@/components";
+import {
+  Button,
+  StackedInputField,
+  GoogleIcon,
+  AppleIcon,
+  StatusAlert,
+} from "@/components";
 
 export default function SignUpScreen() {
   const router = useRouter();
+  const { signUp, errors, fetchStatus } = useSignUp();
+
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
-  const handleSignUp = () => {
+  const isSubmitting = loading || fetchStatus === "fetching";
+
+  const handleSignUp = async () => {
+    const trimmedName = fullName.trim();
+    if (!trimmedName) {
+      setErrorMsg("Please enter your full name");
+      return;
+    }
+
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setErrorMsg("Please enter your email address");
+      return;
+    }
+
+    const trimmedPassword = password.trim();
+    if (!trimmedPassword) {
+      setErrorMsg("Please enter a password");
+      return;
+    }
+
+    if (trimmedPassword.length < 8) {
+      setErrorMsg("Password must be at least 8 characters");
+      return;
+    }
+
+    setErrorMsg("");
     setLoading(true);
-    setTimeout(() => {
+
+    try {
+      // Split name into first and last name
+      const names = trimmedName.split(/\s+/);
+      const firstName = names[0];
+      const lastName = names.slice(1).join(" ") || undefined;
+
+      const createParams: {
+        emailAddress: string;
+        password: string;
+        firstName: string;
+        lastName?: string;
+        unsafeMetadata?: Record<string, unknown>;
+      } = {
+        emailAddress: trimmedEmail,
+        password: trimmedPassword,
+        firstName,
+        lastName,
+        unsafeMetadata: {
+          fullName: trimmedName,
+        },
+      };
+
+      // Create sign up attempt
+      const { error: createError } = await signUp.create(createParams);
+      if (createError) {
+        setLoading(false);
+        const message =
+          createError.longMessage ||
+          createError.message ||
+          "Failed to create account. Please check your details.";
+        setErrorMsg(message);
+        return;
+      }
+
+      // Send verification code
+      const { error: sendError } = await signUp.verifications.sendEmailCode();
       setLoading(false);
+
+      if (sendError) {
+        const message =
+          sendError.longMessage ||
+          sendError.message ||
+          "Failed to send verification code. Please try again.";
+        setErrorMsg(message);
+        return;
+      }
+
+      // Navigate to verification screen
       router.push({
         pathname: "/(auth)/verify",
-        params: { email: email.trim() || "you@example.com" },
+        params: { email: trimmedEmail, flow: "sign-up" },
       });
-    }, 400);
+    } catch (err: unknown) {
+      setLoading(false);
+      const e = err as Error;
+      setErrorMsg(e?.message || "An unexpected error occurred. Please try again.");
+    }
   };
 
   const handleSocialAuth = () => {
-    router.push("/design-system");
+    router.push("/(home)" as Href);
   };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
       <StatusBar barStyle="dark-content" />
+      {/* Required for Clerk Bot Protection / Turnstile challenge */}
+      <View nativeID="clerk-captcha" />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
@@ -121,13 +210,25 @@ export default function SignUpScreen() {
             </Text>
           </View>
 
+          {/* Status Alert for Errors */}
+          {errorMsg ? (
+            <StatusAlert
+              type="error"
+              message={errorMsg}
+              onDismiss={() => setErrorMsg("")}
+            />
+          ) : null}
+
           {/* Stacked Form Fields */}
           <View style={{ gap: spacing.md }}>
             <StackedInputField
               label="Full name"
               placeholder="e.g. Adrian Hajdin"
               value={fullName}
-              onChangeText={setFullName}
+              onChangeText={(text) => {
+                setErrorMsg("");
+                setFullName(text);
+              }}
               icon={<Feather name="user" size={20} color={colors.textPrimary} />}
             />
 
@@ -135,19 +236,27 @@ export default function SignUpScreen() {
               label="Email address"
               placeholder="you@example.com"
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(text) => {
+                setErrorMsg("");
+                setEmail(text);
+              }}
               keyboardType="email-address"
               autoCapitalize="none"
               icon={<Feather name="mail" size={20} color={colors.textPrimary} />}
+              error={errors?.fields?.emailAddress?.message}
             />
 
             <StackedInputField
               label="Password"
               placeholder="At least 8 characters"
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(text) => {
+                setErrorMsg("");
+                setPassword(text);
+              }}
               isPassword
               icon={<Feather name="lock" size={20} color={colors.textPrimary} />}
+              error={errors?.fields?.password?.message}
             />
           </View>
 
@@ -156,7 +265,8 @@ export default function SignUpScreen() {
             title="Create account"
             showArrow
             onPress={handleSignUp}
-            loading={loading}
+            loading={isSubmitting}
+            disabled={isSubmitting}
             size="lg"
           />
 

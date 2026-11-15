@@ -9,28 +9,100 @@ import {
   SafeAreaView,
   StatusBar,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, Href } from "expo-router";
+import { useSignIn } from "@clerk/expo";
 import { Feather } from "@expo/vector-icons";
 import { colors, fonts, spacing } from "@/theme";
-import { Button, StackedInputField, GoogleIcon, AppleIcon } from "@/components";
+import {
+  Button,
+  StackedInputField,
+  GoogleIcon,
+  AppleIcon,
+  StatusAlert,
+} from "@/components";
 
 export default function SignInScreen() {
   const router = useRouter();
+  const { signIn, errors, fetchStatus } = useSignIn();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
-  const handleSignIn = () => {
+  const isSubmitting = loading || fetchStatus === "fetching";
+
+  const handleSignIn = async () => {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setErrorMsg("Please enter your email address");
+      return;
+    }
+
+    setErrorMsg("");
     setLoading(true);
-    setTimeout(() => {
+
+    try {
+      // If user provided a password, try email + password first
+      if (password.trim()) {
+        const { error: passError } = await signIn.password({
+          emailAddress: trimmedEmail,
+          password: password.trim(),
+        });
+
+        if (!passError && signIn.status === "complete") {
+          await signIn.finalize({
+            navigate: ({ session }) => {
+              if (session?.currentTask) return;
+              router.replace("/(home)" as Href);
+            },
+          });
+          setLoading(false);
+          return;
+        }
+
+        // If password was rejected with an error, display it
+        if (passError) {
+          setLoading(false);
+          const msg =
+            passError.longMessage ||
+            passError.message ||
+            "Incorrect email or password";
+          setErrorMsg(msg);
+          return;
+        }
+      }
+
+      // Default strategy: Email OTP verification code
+      const { error: codeError } = await signIn.emailCode.sendCode({
+        emailAddress: trimmedEmail,
+      });
+
       setLoading(false);
-      // Mocked successful sign in -> navigates to app
-      router.push("/design-system");
-    }, 400);
+
+      if (codeError) {
+        const msg =
+          codeError.longMessage ||
+          codeError.message ||
+          "Could not send sign-in code. Please try again.";
+        setErrorMsg(msg);
+        return;
+      }
+
+      // Route to verify screen
+      router.push({
+        pathname: "/(auth)/verify",
+        params: { email: trimmedEmail, flow: "sign-in" },
+      });
+    } catch (err: unknown) {
+      setLoading(false);
+      const e = err as Error;
+      setErrorMsg(e?.message || "An unexpected error occurred. Please try again.");
+    }
   };
 
   const handleSocialAuth = () => {
-    router.push("/design-system");
+    router.push("/(home)" as Href);
   };
 
   return (
@@ -118,28 +190,63 @@ export default function SignInScreen() {
             </Text>
           </View>
 
+          {/* Status Alert for Errors */}
+          {errorMsg ? (
+            <StatusAlert
+              type="error"
+              message={errorMsg}
+              onDismiss={() => setErrorMsg("")}
+            />
+          ) : null}
+
           {/* Stacked Form Fields */}
           <View style={{ gap: spacing.md }}>
             <StackedInputField
               label="Email address"
               placeholder="you@example.com"
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(text) => {
+                setErrorMsg("");
+                setEmail(text);
+              }}
               keyboardType="email-address"
               autoCapitalize="none"
               icon={<Feather name="mail" size={20} color={colors.textPrimary} />}
+              error={errors?.fields?.identifier?.message}
             />
 
             <StackedInputField
-              label="Password"
-              placeholder="Enter your password"
+              label="Password (optional for email code)"
+              placeholder="Enter your password or leave blank for OTP"
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(text) => {
+                setErrorMsg("");
+                setPassword(text);
+              }}
               isPassword
               icon={<Feather name="lock" size={20} color={colors.textPrimary} />}
+              error={errors?.fields?.password?.message}
             />
 
-            <Pressable style={{ alignSelf: "flex-end" }} hitSlop={8}>
+            <Pressable
+              style={{ alignSelf: "flex-end" }}
+              hitSlop={8}
+              onPress={async () => {
+                if (!email.trim()) {
+                  setErrorMsg("Enter your email address to reset password");
+                  return;
+                }
+                const { error } = await signIn.resetPasswordEmailCode.sendCode();
+                if (error) {
+                  setErrorMsg(error.longMessage || error.message);
+                } else {
+                  router.push({
+                    pathname: "/(auth)/verify",
+                    params: { email: email.trim(), flow: "sign-in" },
+                  });
+                }
+              }}
+            >
               <Text
                 style={{
                   fontFamily: fonts.semiBold,
@@ -157,7 +264,8 @@ export default function SignInScreen() {
             title="Sign in"
             showArrow
             onPress={handleSignIn}
-            loading={loading}
+            loading={isSubmitting}
+            disabled={isSubmitting}
             size="lg"
           />
 

@@ -27,7 +27,7 @@ npx eas-cli@latest <cmd>    # EAS builds, submits, and updates (use instead of b
 
 Each tool has one job. Ask before moving a responsibility to a different tool.
 
-- **Auth:** Clerk is the source of truth. The app keeps its own custom auth screens in `src/app/(auth)/`. Set Clerk up through the Clerk CLI and use the Clerk MCP for current Expo patterns.
+- **Auth:** Clerk is the source of truth. Wrapped in `src/app/_layout.tsx` via `ClerkProvider` with persistent keychain `tokenCache` from `@clerk/expo/token-cache`. Custom auth screens live in `src/app/(auth)/` using `useSignIn()` and `useSignUp()` with email OTP verification. Protected routes live in `src/app/(home)/` gated by `useAuth()` in `_layout.tsx`. Set Clerk up through the Clerk CLI and Clerk MCP.
 - **Content:** Sanity (properties, hosts, policies, house rules). Studio is a standalone app in `studio/`. Schema deploys and content changes go through the Sanity MCP, and generated property copy uses Agent Actions.
 - **Exact constraints** (price, guests, type, amenities, pets, place): GROQ filters, with values always passed as params.
 - **Soft intent** (quiet, cozy, secluded): Dataset Embeddings via `text::semanticSimilarity()` inside `score()`.
@@ -45,6 +45,7 @@ Each tool has one job. Ask before moving a responsibility to a different tool.
 - Jev is not an agent. It answers typed questions (Choice, Noul, Score) with probabilities. It never writes GROQ, calls tools, or generates text. Code builds queries from its answers.
 - Prices, guest counts, and dates are parsed in code. Jev may choose between candidates code found, but never produces the value.
 - Embeddings rank, they don't filter, and they only see the document itself (no references). Hard constraints are always GROQ filters, and text that should affect ranking lives on the property document.
+- Protected routes check `isLoaded` before `isSignedIn` via `useAuth()`. Unauthenticated users redirect to `/(auth)/sign-in`; authenticated users are redirected away from auth and onboarding to `/(home)`.
 - Policy answers show only text from the stay's data and Roam's policies, word for word. If nothing answers the question, say so and point to support.
 - API routes verify the Clerk session before doing any work.
 - PostHog failures never block the app. Never send what guests type, tokens, or personal data in events.
