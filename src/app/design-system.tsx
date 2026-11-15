@@ -27,6 +27,7 @@ import {
   Stepper,
   ListingCard,
   GlassTabBar,
+  GoogleIcon,
   TabKey,
 } from "@/components";
 
@@ -166,7 +167,7 @@ export default function DesignSystemScreen() {
             <Button
               variant="secondary"
               title="Continue with Google"
-              icon={<FontAwesome5 name="google" size={18} color="#EA4335" />}
+              icon={<GoogleIcon size={18} />}
               onPress={() => {}}
             />
 

@@ -10,6 +10,7 @@ import {
   PlusJakartaSans_700Bold,
   PlusJakartaSans_800ExtraBold,
 } from "@expo-google-fonts/plus-jakarta-sans";
+import { Feather, Ionicons, FontAwesome, FontAwesome5 } from "@expo/vector-icons";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -20,6 +21,10 @@ export default function RootLayout() {
     PlusJakartaSans_600SemiBold,
     PlusJakartaSans_700Bold,
     PlusJakartaSans_800ExtraBold,
+    ...Feather.font,
+    ...Ionicons.font,
+    ...FontAwesome.font,
+    ...FontAwesome5.font,
   });
 
   useEffect(() => {

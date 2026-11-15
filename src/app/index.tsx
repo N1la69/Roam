@@ -12,9 +12,9 @@ import {
   StatusBar,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { colors, fonts, radius, spacing } from "@/theme";
-import { Button } from "@/components";
+import { Button, GoogleIcon } from "@/components";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -305,7 +305,7 @@ export default function OnboardingScreen() {
             <Button
               variant="secondary"
               title="Continue with Google"
-              icon={<FontAwesome5 name="google" size={17} color="#EA4335" />}
+              icon={<GoogleIcon size={19} />}
               onPress={handleGoogleAuth}
               size="lg"
             />

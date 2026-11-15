@@ -10,13 +10,13 @@ import {
   StatusBar,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { Feather, FontAwesome5 } from "@expo/vector-icons";
+import { Feather } from "@expo/vector-icons";
 import { colors, fonts, spacing } from "@/theme";
-import { Button, InputField, ThemedText } from "@/components";
+import { Button, StackedInputField, GoogleIcon, AppleIcon } from "@/components";
 
 export default function SignUpScreen() {
   const router = useRouter();
-  const [name, setName] = useState("");
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -25,8 +25,15 @@ export default function SignUpScreen() {
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
-      router.push("/design-system");
-    }, 800);
+      router.push({
+        pathname: "/(auth)/verify",
+        params: { email: email.trim() || "you@example.com" },
+      });
+    }, 400);
+  };
+
+  const handleSocialAuth = () => {
+    router.push("/design-system");
   };
 
   return (
@@ -39,74 +46,117 @@ export default function SignUpScreen() {
         <ScrollView
           contentContainerStyle={{
             paddingHorizontal: spacing.lg,
-            paddingTop: spacing.md,
+            paddingTop: spacing.sm,
             paddingBottom: spacing.xxl,
             gap: spacing.lg,
           }}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          {/* Header navigation bar */}
+          {/* Header Navigation Bar */}
           <View
             style={{
               flexDirection: "row",
               justifyContent: "space-between",
               alignItems: "center",
+              marginTop: spacing.xs,
             }}
           >
+            {/* Circular Back Button */}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Go back"
               onPress={() => router.back()}
               hitSlop={12}
               style={({ pressed }) => ({
-                width: 40,
-                height: 40,
-                borderRadius: 20,
-                backgroundColor: colors.surfaceGray,
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: "#FFFFFF",
                 alignItems: "center",
                 justifyContent: "center",
                 opacity: pressed ? 0.7 : 1,
               })}
             >
-              <Feather name="arrow-left" size={20} color={colors.textPrimary} />
+              <Feather name="chevron-left" size={20} color={colors.textPrimary} />
             </Pressable>
 
+            {/* Brand Wordmark */}
             <Text
               style={{
-                fontFamily: fonts.bold,
-                fontSize: 26,
-                letterSpacing: -1,
+                fontFamily: fonts.extraBold,
+                fontSize: 28,
+                letterSpacing: -1.2,
                 color: colors.textPrimary,
               }}
             >
               roam
             </Text>
-
-            <View style={{ width: 40 }} />
           </View>
 
-          {/* Heading */}
-          <View style={{ gap: spacing.xs, marginTop: spacing.sm }}>
-            <ThemedText
-              variant="heading"
-              style={{ fontSize: 30, lineHeight: 36, color: colors.textPrimary }}
+          {/* Title & Subtitle */}
+          <View style={{ gap: spacing.xs + 2, marginTop: spacing.xs }}>
+            <Text
+              style={{
+                fontFamily: fonts.bold,
+                fontSize: 36,
+                lineHeight: 40,
+                color: colors.textPrimary,
+                letterSpacing: -0.8,
+              }}
             >
-              Create an account
-            </ThemedText>
-            <ThemedText
-              variant="body"
-              style={{ color: colors.textSecondary, fontSize: 15 }}
+              {"Create\nyour account"}
+            </Text>
+            <Text
+              style={{
+                fontFamily: fonts.regular,
+                fontSize: 15,
+                lineHeight: 22,
+                color: colors.textSecondary,
+              }}
             >
-              Join roam to find unforgettable stays tailored to every story.
-            </ThemedText>
+              Join roam to save your stays, get personalized recommendations and access them across all your devices.
+            </Text>
           </View>
 
-          {/* Google SSO Button */}
+          {/* Stacked Form Fields */}
+          <View style={{ gap: spacing.md }}>
+            <StackedInputField
+              label="Full name"
+              placeholder="e.g. Adrian Hajdin"
+              value={fullName}
+              onChangeText={setFullName}
+              icon={<Feather name="user" size={20} color={colors.textPrimary} />}
+            />
+
+            <StackedInputField
+              label="Email address"
+              placeholder="you@example.com"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              icon={<Feather name="mail" size={20} color={colors.textPrimary} />}
+            />
+
+            <StackedInputField
+              label="Password"
+              placeholder="At least 8 characters"
+              value={password}
+              onChangeText={setPassword}
+              isPassword
+              icon={<Feather name="lock" size={20} color={colors.textPrimary} />}
+            />
+          </View>
+
+          {/* Primary Action Button */}
           <Button
-            variant="secondary"
-            title="Continue with Google"
-            icon={<FontAwesome5 name="google" size={17} color="#EA4335" />}
-            onPress={() => router.push("/design-system")}
+            title="Create account"
+            showArrow
+            onPress={handleSignUp}
+            loading={loading}
             size="lg"
           />
 
@@ -120,90 +170,71 @@ export default function SignUpScreen() {
             }}
           >
             <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
-            <ThemedText variant="footnote" style={{ color: colors.textMuted }}>
-              or with email
-            </ThemedText>
+            <Text
+              style={{
+                fontFamily: fonts.regular,
+                fontSize: 14,
+                color: colors.textSecondary,
+              }}
+            >
+              or
+            </Text>
             <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
           </View>
 
-          {/* Form Fields */}
+          {/* Social Auth Buttons */}
           <View style={{ gap: spacing.md }}>
-            <InputField
-              placeholder="Full name"
-              value={name}
-              onChangeText={setName}
-              leftIcon={
-                <Feather name="user" size={18} color={colors.textSecondary} />
-              }
+            <Button
+              variant="secondary"
+              title="Continue with Google"
+              icon={<GoogleIcon size={19} />}
+              onPress={handleSocialAuth}
+              size="lg"
             />
 
-            <InputField
-              placeholder="Email address"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              leftIcon={
-                <Feather name="mail" size={18} color={colors.textSecondary} />
-              }
+            <Button
+              variant="secondary"
+              title="Continue with Apple"
+              icon={<AppleIcon size={20} />}
+              onPress={handleSocialAuth}
+              size="lg"
             />
-
-            <InputField
-              placeholder="Create a password"
-              value={password}
-              onChangeText={setPassword}
-              isPassword
-              leftIcon={
-                <Feather name="lock" size={18} color={colors.textSecondary} />
-              }
-            />
-
-            <ThemedText
-              variant="footnote"
-              style={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}
-            >
-              {"By signing up, you agree to Roam's Terms of Service and Privacy Policy."}
-            </ThemedText>
           </View>
 
-          {/* Primary Action Button */}
-          <Button
-            title="Create account"
-            onPress={handleSignUp}
-            loading={loading}
-            size="lg"
-          />
-
-          {/* Bottom Switcher */}
+          {/* Footer Switcher */}
           <View
             style={{
               flexDirection: "row",
               justifyContent: "center",
               alignItems: "center",
               gap: 4,
-              marginTop: spacing.md,
+              marginTop: spacing.xs,
             }}
           >
-            <ThemedText
-              variant="caption"
-              style={{ color: colors.textSecondary }}
+            <Text
+              style={{
+                fontFamily: fonts.regular,
+                fontSize: 14,
+                color: colors.textSecondary,
+              }}
             >
-              Already have an account?
-            </ThemedText>
+              {"Already have an account?"}
+            </Text>
             <Pressable
+              accessibilityRole="button"
               onPress={() => router.push("/(auth)/sign-in")}
               hitSlop={8}
             >
-              <ThemedText
-                variant="caption"
+              <Text
                 style={{
+                  fontFamily: fonts.bold,
+                  fontSize: 14,
                   color: colors.textPrimary,
-                  fontWeight: "700",
                   textDecorationLine: "underline",
                 }}
               >
                 Sign in
-              </ThemedText>
+              </Text>
             </Pressable>
           </View>
         </ScrollView>

@@ -5,9 +5,9 @@ import {
   StyleProp,
   View,
 } from "react-native";
-import { Feather } from "@expo/vector-icons";
 import { colors, spacing, radius } from "@/theme";
 import { ThemedText } from "./ThemedText";
+import { ArrowRightIcon } from "./ArrowRightIcon";
 
 export interface ButtonProps {
   variant?: "primary" | "secondary" | "ghost";
@@ -75,6 +75,7 @@ export function Button({
 }: ButtonProps) {
   const currentVariant = variantStyles[variant];
   const currentSize = sizeStyles[size];
+  const arrowSize = size === "sm" ? 16 : size === "lg" ? 22 : 18;
 
   return (
     <Pressable
@@ -88,6 +89,7 @@ export function Button({
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "center",
+          position: "relative",
           backgroundColor: currentVariant.backgroundColor,
           borderColor: currentVariant.borderColor,
           borderWidth: currentVariant.borderWidth,
@@ -101,26 +103,44 @@ export function Button({
       {loading ? (
         <ActivityIndicator color={currentVariant.textColor} />
       ) : (
-        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-          {icon}
-          <ThemedText
-            variant="button"
+        <>
+          <View
             style={{
-              color: currentVariant.textColor,
-              fontSize: size === "sm" ? 14 : size === "lg" ? 18 : 16,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: spacing.sm,
             }}
           >
-            {title}
-          </ThemedText>
-          {rightIcon}
+            {icon}
+            <ThemedText
+              variant="button"
+              style={{
+                color: currentVariant.textColor,
+                fontSize: size === "sm" ? 14 : size === "lg" ? 17 : 16,
+                fontWeight: "600",
+              }}
+            >
+              {title}
+            </ThemedText>
+            {rightIcon && !showArrow && rightIcon}
+          </View>
+
           {showArrow && (
-            <Feather
-              name="arrow-right"
-              size={size === "sm" ? 16 : 20}
-              color={currentVariant.textColor}
-            />
+            <View
+              style={{
+                position: "absolute",
+                right: size === "sm" ? spacing.md : spacing.xl,
+                top: 0,
+                bottom: 0,
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <ArrowRightIcon size={arrowSize} color={currentVariant.textColor} />
+            </View>
           )}
-        </View>
+        </>
       )}
     </Pressable>
   );
