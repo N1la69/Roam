@@ -10,7 +10,7 @@ import {
   PlusJakartaSans_700Bold,
   PlusJakartaSans_800ExtraBold,
 } from "@expo-google-fonts/plus-jakarta-sans";
-import { Feather, Ionicons, FontAwesome, FontAwesome5 } from "@expo/vector-icons";
+import { Feather, Ionicons, FontAwesome, FontAwesome5, MaterialIcons } from "@expo/vector-icons";
 import { ClerkProvider } from "@clerk/expo";
 import { tokenCache } from "@clerk/expo/token-cache";
 
@@ -33,6 +33,7 @@ export default function RootLayout() {
     ...Ionicons.font,
     ...FontAwesome.font,
     ...FontAwesome5.font,
+    ...MaterialIcons.font,
   });
 
   useEffect(() => {

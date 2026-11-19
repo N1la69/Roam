@@ -1,7 +1,7 @@
-import { View, Pressable, ViewStyle, StyleProp } from "react-native";
+import React from "react";
+import { View, Text, Pressable, ViewStyle, StyleProp } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
-import { colors, radius, spacing, shadows } from "@/theme";
-import { ThemedText } from "./ThemedText";
+import { colors, fonts, radius } from "@/theme";
 
 export type TabKey = "home" | "search" | "trips" | "profile";
 
@@ -19,49 +19,49 @@ export function GlassTabBar({
   const tabs: {
     key: TabKey;
     label: string;
-    icon: (active: boolean) => React.ReactNode;
+    renderIcon: (isActive: boolean) => React.ReactNode;
   }[] = [
     {
       key: "home",
       label: "Home",
-      icon: (active) => (
+      renderIcon: (isActive) => (
         <Ionicons
-          name={active ? "home" : "home-outline"}
-          size={20}
-          color={colors.textPrimary}
+          name={isActive ? "home" : "home-outline"}
+          size={21}
+          color={isActive ? "#0B0B1A" : "#4B5563"}
         />
       ),
     },
     {
       key: "search",
       label: "Search",
-      icon: (active) => (
+      renderIcon: (isActive) => (
         <Feather
           name="search"
-          size={20}
-          color={active ? colors.textPrimary : colors.textSecondary}
+          size={21}
+          color={isActive ? "#0B0B1A" : "#4B5563"}
         />
       ),
     },
     {
       key: "trips",
       label: "Trips",
-      icon: (active) => (
+      renderIcon: (isActive) => (
         <Feather
           name="calendar"
           size={20}
-          color={active ? colors.textPrimary : colors.textSecondary}
+          color={isActive ? "#0B0B1A" : "#4B5563"}
         />
       ),
     },
     {
       key: "profile",
       label: "Profile",
-      icon: (active) => (
+      renderIcon: (isActive) => (
         <Feather
           name="user"
-          size={20}
-          color={active ? colors.textPrimary : colors.textSecondary}
+          size={21}
+          color={isActive ? "#0B0B1A" : "#4B5563"}
         />
       ),
     },
@@ -74,14 +74,18 @@ export function GlassTabBar({
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "space-between",
-          backgroundColor: colors.glass,
-          borderColor: "rgba(255, 255, 255, 0.6)",
-          borderWidth: 1.5,
+          backgroundColor: "#FFFFFF",
+          borderColor: "rgba(0, 0, 0, 0.08)",
+          borderWidth: 1,
           borderRadius: radius.full,
-          paddingHorizontal: spacing.sm,
-          paddingVertical: spacing.xs + 2,
-          boxShadow: shadows.glass,
-          minHeight: 64,
+          paddingHorizontal: 12,
+          paddingVertical: 8,
+          height: 68,
+          shadowColor: "#000000",
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.12,
+          shadowRadius: 18,
+          elevation: 12,
         },
         style,
       ]}
@@ -94,32 +98,42 @@ export function GlassTabBar({
             key={tab.key}
             accessibilityRole="tab"
             accessibilityState={{ selected: isActive }}
+            accessibilityLabel={tab.label}
             onPress={() => onTabPress(tab.key)}
-            style={({ pressed }) => [
-              {
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-                paddingHorizontal: isActive ? spacing.md : spacing.sm + 2,
-                paddingVertical: spacing.sm,
-                borderRadius: radius.full,
-                backgroundColor: isActive ? colors.primary : "transparent",
-                opacity: pressed ? 0.75 : 1,
-              },
-            ]}
+            hitSlop={8}
+            style={({ pressed }) => ({
+              flex: 1,
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 3,
+              opacity: pressed ? 0.75 : 1,
+            })}
           >
-            {tab.icon(isActive)}
-            {isActive && (
-              <ThemedText
-                variant="footnote"
-                style={{
-                  fontWeight: "700",
-                  color: colors.textPrimary,
-                }}
-              >
-                {tab.label}
-              </ThemedText>
-            )}
+            {/* Active Highlight Indicator Pill / Icon */}
+            <View
+              style={{
+                width: isActive ? 48 : 36,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: isActive ? colors.primary : "transparent",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {tab.renderIcon(isActive)}
+            </View>
+
+            {/* Tab Label */}
+            <Text
+              style={{
+                fontFamily: isActive ? fonts.bold : fonts.medium,
+                fontSize: 11,
+                color: isActive ? "#0B0B1A" : "#6B7280",
+                letterSpacing: -0.2,
+              }}
+            >
+              {tab.label}
+            </Text>
           </Pressable>
         );
       })}

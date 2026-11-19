@@ -28,6 +28,7 @@ npx eas-cli@latest <cmd>    # EAS builds, submits, and updates (use instead of b
 Each tool has one job. Ask before moving a responsibility to a different tool.
 
 - **Auth:** Clerk is the source of truth. Wrapped in `src/app/_layout.tsx` via `ClerkProvider` with persistent keychain `tokenCache` from `@clerk/expo/token-cache`. Custom auth screens live in `src/app/(auth)/` using `useSignIn()` and `useSignUp()` with email OTP verification. Protected routes live in `src/app/(home)/` gated by `useAuth()` in `_layout.tsx`. Set Clerk up through the Clerk CLI and Clerk MCP.
+- **Navigation:** Expo Router file-based routing. Authenticated app lives in `src/app/(home)/_layout.tsx` using `Tabs` with a floating Liquid Glass tab bar (`GlassTabBar`) for Home, Search, Trips, and Profile.
 - **Content:** Sanity (properties, hosts, policies, house rules). Studio is a standalone app in `studio/`. Schema deploys and content changes go through the Sanity MCP, and generated property copy uses Agent Actions.
 - **Exact constraints** (price, guests, type, amenities, pets, place): GROQ filters, with values always passed as params.
 - **Soft intent** (quiet, cozy, secluded): Dataset Embeddings via `text::semanticSimilarity()` inside `score()`.
