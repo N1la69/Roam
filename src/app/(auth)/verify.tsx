@@ -14,6 +14,7 @@ import { useRouter, useLocalSearchParams, Href } from "expo-router";
 import { useSignIn, useSignUp } from "@clerk/expo";
 import { Feather } from "@expo/vector-icons";
 import { colors, fonts, spacing } from "@/theme";
+import { posthog } from "@/lib/posthog";
 import { Button, StatusAlert } from "@/components";
 
 export default function VerificationScreen() {
@@ -116,6 +117,7 @@ export default function VerificationScreen() {
               router.replace("/(home)" as Href);
             },
           });
+          posthog?.capture("sign_in_completed", { method: "email_code" });
         } else {
           setLoading(false);
           setErrorMsg(`Sign-in status: ${signIn.status}`);
@@ -141,6 +143,7 @@ export default function VerificationScreen() {
               router.replace("/(home)" as Href);
             },
           });
+          posthog?.capture("sign_up_completed", { method: "email_code" });
         } else {
           setLoading(false);
           setErrorMsg(`Sign-up status: ${signUp.status}`);
@@ -178,6 +181,7 @@ export default function VerificationScreen() {
         }
       }
 
+      posthog?.capture("verification_code_resent", { flow });
       setResendSuccess(true);
       setCountdown(45);
       setDigits(["", "", "", "", "", ""]);

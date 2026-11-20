@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { colors, fonts, radius, spacing } from "@/theme";
 import { Button, ProfileRow, Badge } from "@/components";
+import { posthog } from "@/lib/posthog";
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -32,6 +33,8 @@ export default function ProfileScreen() {
     try {
       setSigningOut(true);
       await signOut();
+      posthog?.capture("user_signed_out");
+      posthog?.reset();
       router.replace("/(auth)/sign-in");
     } catch {
       setSigningOut(false);

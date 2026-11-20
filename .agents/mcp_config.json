@@ -2,6 +2,9 @@
   "mcpServers": {
     "clerk": {
       "url": "https://mcp.clerk.com/mcp"
+    },
+    "sanity": {
+      "url": "https://mcp.sanity.io"
     }
   }
 }

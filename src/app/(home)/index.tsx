@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,8 @@ import {
   StatusBar,
   Pressable,
   Image,
+  RefreshControl,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter, Href } from "expo-router";
 import { useUser } from "@clerk/expo";
@@ -20,9 +22,9 @@ import { colors, fonts, radius, spacing } from "@/theme";
 import {
   CATEGORIES,
   PropertyCategory,
-  PROPERTIES,
-  filterProperties,
 } from "@/data/properties";
+import { sanityFetch, SanityProperty } from "@/lib/sanity";
+import { posthog, posthogLogger } from "@/lib/posthog";
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -30,6 +32,11 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
 
   const [selectedCategory, setSelectedCategory] = useState<PropertyCategory>("All");
+  const [stays, setStays] = useState<SanityProperty[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const defaultPrompt = "quiet pet friendly cabin with hot tub";
 
   const displayName =
@@ -42,11 +49,132 @@ export default function HomeScreen() {
     user?.imageUrl ||
     "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop";
 
-  const filteredStays = filterProperties("", selectedCategory);
-  const featuredStay = filteredStays[0] || PROPERTIES[0];
-  const secondaryStays = filteredStays.slice(1);
+  const handleCategoryChange = (category: PropertyCategory) => {
+    if (category === selectedCategory) return;
+    posthog?.capture("stay_category_selected", { category });
+    setSelectedCategory(category);
+    setLoading(true);
+    setError(null);
+  };
 
-  const handleSearchNavigation = (queryText: string) => {
+  const handleRefresh = useCallback(async () => {
+    posthogLogger?.info("stay refresh started", {
+      category: selectedCategory,
+    });
+    setRefreshing(true);
+    setError(null);
+    try {
+      const query = `
+        *[_type == "property" && ($category == "All" || category == $category)] | order(isFeatured desc, rating desc, _createdAt desc) {
+          _id,
+          title,
+          slug,
+          tagline,
+          category,
+          pricePerNight,
+          cleaningFee,
+          rating,
+          reviewsCount,
+          isFeatured,
+          maxGuests,
+          bedrooms,
+          beds,
+          baths,
+          petFriendly,
+          amenities,
+          location,
+          description,
+          neighborhoodOverview,
+          tags,
+          checkInTime,
+          checkOutTime,
+          imageUrl,
+          galleryUrls
+        }
+      `;
+      const result = await sanityFetch<SanityProperty[]>(query, { category: selectedCategory });
+      setStays(result || []);
+      posthog?.capture("stays_refreshed", {
+        category: selectedCategory,
+        result_count: result?.length || 0,
+      });
+      posthogLogger?.info("stay refresh completed", {
+        category: selectedCategory,
+        result_count: result?.length || 0,
+      });
+    } catch (err: any) {
+      posthogLogger?.warn("stay refresh failed", {
+        category: selectedCategory,
+      });
+      console.error("Failed to refresh stays from Sanity:", err);
+      setError(err.message || "Unable to refresh stays.");
+    } finally {
+      setRefreshing(false);
+    }
+  }, [selectedCategory]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const query = `
+      *[_type == "property" && ($category == "All" || category == $category)] | order(isFeatured desc, rating desc, _createdAt desc) {
+        _id,
+        title,
+        slug,
+        tagline,
+        category,
+        pricePerNight,
+        cleaningFee,
+        rating,
+        reviewsCount,
+        isFeatured,
+        maxGuests,
+        bedrooms,
+        beds,
+        baths,
+        petFriendly,
+        amenities,
+        location,
+        description,
+        neighborhoodOverview,
+        tags,
+        checkInTime,
+        checkOutTime,
+        imageUrl,
+        galleryUrls
+      }
+    `;
+
+    sanityFetch<SanityProperty[]>(query, { category: selectedCategory })
+      .then((result) => {
+        if (!isCancelled) {
+          setStays(result || []);
+          setLoading(false);
+          setError(null);
+        }
+      })
+      .catch((err: any) => {
+        if (!isCancelled) {
+          console.error("Failed to load stays from Sanity:", err);
+          setError(err.message || "Unable to load stays. Please try again.");
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedCategory]);
+
+  const featuredStay = stays.find((s) => s.isFeatured) || stays[0];
+  const secondaryStays = stays.filter((s) => s._id !== featuredStay?._id);
+
+  const handleSearchNavigation = (queryText: string, entryPoint: string) => {
+    posthog?.capture("stay_search_opened", {
+      entry_point: entryPoint,
+      category: selectedCategory,
+      has_prefilled_query: Boolean(queryText),
+    });
     router.push({
       pathname: "/(home)/search" as any,
       params: { q: queryText, category: selectedCategory },
@@ -71,6 +199,14 @@ export default function HomeScreen() {
           gap: spacing.lg,
         }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
       >
         {/* Top Header Bar (Below Status Bar & Dynamic Island) */}
         <View
@@ -154,7 +290,7 @@ export default function HomeScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Search stays"
-            onPress={() => handleSearchNavigation("")}
+            onPress={() => handleSearchNavigation("", "search_icon")}
             hitSlop={8}
             style={({ pressed }) => ({
               width: 50,
@@ -176,7 +312,7 @@ export default function HomeScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Search prompt"
-          onPress={() => handleSearchNavigation(defaultPrompt)}
+          onPress={() => handleSearchNavigation(defaultPrompt, "suggested_prompt")}
           style={({ pressed }) => ({
             flexDirection: "row",
             alignItems: "center",
@@ -244,7 +380,7 @@ export default function HomeScreen() {
                   key={cat.id}
                   accessibilityRole="button"
                   accessibilityState={{ selected: isActive }}
-                  onPress={() => setSelectedCategory(cat.id)}
+                  onPress={() => handleCategoryChange(cat.id)}
                   style={({ pressed }) => ({
                     flexDirection: "row",
                     alignItems: "center",
@@ -302,7 +438,7 @@ export default function HomeScreen() {
                   key={cat.id}
                   accessibilityRole="button"
                   accessibilityState={{ selected: isActive }}
-                  onPress={() => setSelectedCategory(cat.id)}
+                  onPress={() => handleCategoryChange(cat.id)}
                   style={({ pressed }) => ({
                     flexDirection: "row",
                     alignItems: "center",
@@ -345,12 +481,154 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Featured Stay Hero Card (Matching Design Screenshot Exactly) */}
-        {featuredStay && (
+        {/* Loading Skeleton State */}
+        {loading && !refreshing && (
+          <View style={{ gap: spacing.lg }}>
+            {/* Featured Stay Skeleton */}
+            <View
+              style={{
+                width: "100%",
+                height: 380,
+                borderRadius: 28,
+                backgroundColor: colors.surfaceGray,
+                borderWidth: 1,
+                borderColor: colors.border,
+                alignItems: "center",
+                justifyContent: "center",
+                gap: spacing.md,
+              }}
+            >
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text
+                style={{
+                  fontFamily: fonts.medium,
+                  fontSize: 14,
+                  color: colors.textSecondary,
+                }}
+              >
+                Finding unforgettable stays...
+              </Text>
+            </View>
+
+            {/* Secondary Stay Skeleton */}
+            <View
+              style={{
+                width: "100%",
+                height: 240,
+                borderRadius: 24,
+                backgroundColor: colors.surfaceGray,
+                borderWidth: 1,
+                borderColor: colors.border,
+                opacity: 0.6,
+              }}
+            />
+          </View>
+        )}
+
+        {/* Error State */}
+        {error && !loading && (
+          <View
+            style={{
+              padding: spacing.xl,
+              backgroundColor: colors.surfaceGray,
+              borderRadius: radius.xl,
+              borderWidth: 1,
+              borderColor: colors.border,
+              alignItems: "center",
+              gap: spacing.sm,
+            }}
+          >
+            <Feather name="alert-circle" size={32} color={colors.error} />
+            <Text
+              style={{
+                fontFamily: fonts.bold,
+                fontSize: 16,
+                color: colors.textPrimary,
+                textAlign: "center",
+              }}
+            >
+              Unable to load stays
+            </Text>
+            <Text
+              style={{
+                fontFamily: fonts.regular,
+                fontSize: 13,
+                color: colors.textSecondary,
+                textAlign: "center",
+                marginBottom: spacing.xs,
+              }}
+            >
+              {error}
+            </Text>
+            <Pressable
+              onPress={() => {
+                setLoading(true);
+                setSelectedCategory(selectedCategory);
+              }}
+              style={({ pressed }) => ({
+                backgroundColor: colors.primary,
+                paddingHorizontal: 20,
+                paddingVertical: 10,
+                borderRadius: radius.full,
+                opacity: pressed ? 0.8 : 1,
+              })}
+            >
+              <Text
+                style={{
+                  fontFamily: fonts.bold,
+                  fontSize: 14,
+                  color: colors.textPrimary,
+                }}
+              >
+                Retry
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
+        {/* Empty State */}
+        {!loading && !error && stays.length === 0 && (
+          <View
+            style={{
+              padding: spacing.xl,
+              backgroundColor: colors.surfaceGray,
+              borderRadius: radius.xl,
+              borderWidth: 1,
+              borderColor: colors.border,
+              alignItems: "center",
+              gap: spacing.xs,
+            }}
+          >
+            <Feather name="home" size={28} color={colors.textSecondary} />
+            <Text
+              style={{
+                fontFamily: fonts.bold,
+                fontSize: 16,
+                color: colors.textPrimary,
+                textAlign: "center",
+              }}
+            >
+              No stays found
+            </Text>
+            <Text
+              style={{
+                fontFamily: fonts.regular,
+                fontSize: 13,
+                color: colors.textSecondary,
+                textAlign: "center",
+              }}
+            >
+              No properties available under {selectedCategory}. Try another category.
+            </Text>
+          </View>
+        )}
+
+        {/* Featured Stay Hero Card (Live Sanity Content) */}
+        {!loading && !error && featuredStay && (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`View ${featuredStay.title}`}
-            onPress={() => handleSearchNavigation(featuredStay.title)}
+            onPress={() => handleSearchNavigation(featuredStay.title, "featured_stay")}
             style={({ pressed }) => ({
               width: "100%",
               height: 380,
@@ -411,7 +689,7 @@ export default function HomeScreen() {
                   color: colors.textPrimary,
                 }}
               >
-                {featuredStay.rating}
+                {featuredStay.rating?.toFixed(1) || "4.9"}
               </Text>
             </View>
 
@@ -441,7 +719,8 @@ export default function HomeScreen() {
                       textShadowRadius: 2,
                     }}
                   >
-                    {featuredStay.location}
+                    {featuredStay.location?.displayAddress ||
+                      `${featuredStay.location?.city}, ${featuredStay.location?.stateOrProvince}`}
                   </Text>
                 </View>
                 <Text
@@ -481,111 +760,118 @@ export default function HomeScreen() {
           </Pressable>
         )}
 
-        {/* Secondary Stays (Scrollable Feed) */}
-        {secondaryStays.map((stay, idx) => (
-          <Animated.View
-            key={stay.id}
-            entering={FadeInDown.duration(300).delay(idx * 60)}
-          >
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`View ${stay.title}`}
-              onPress={() => handleSearchNavigation(stay.title)}
-              style={({ pressed }) => ({
-                width: "100%",
-                height: 240,
-                borderRadius: 24,
-                overflow: "hidden",
-                position: "relative",
-                backgroundColor: colors.surfaceGray,
-                transform: [{ scale: pressed ? 0.985 : 1 }],
-              })}
-            >
-              <Image
-                source={{ uri: stay.imageUrl }}
-                style={{ width: "100%", height: "100%", position: "absolute" }}
-                resizeMode="cover"
-              />
-              <View
-                style={{
-                  position: "absolute",
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  height: "55%",
-                  backgroundColor: "rgba(0, 0, 0, 0.45)",
-                }}
-              />
-              <View
-                style={{
-                  position: "absolute",
-                  top: 14,
-                  right: 14,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 4,
-                  backgroundColor: "#FFFFFF",
-                  paddingVertical: 4,
-                  paddingHorizontal: 10,
-                  borderRadius: radius.full,
-                }}
+        {/* Secondary Stays (Scrollable Feed from Live Sanity) */}
+        {!loading &&
+          !error &&
+          secondaryStays.map((stay, idx) => {
+            const locText =
+              stay.location?.displayAddress ||
+              `${stay.location?.city}, ${stay.location?.stateOrProvince}`;
+            return (
+              <Animated.View
+                key={stay._id}
+                entering={FadeInDown.duration(300).delay(idx * 60)}
               >
-                <Ionicons name="star" size={13} color="#0B0B1A" />
-                <Text
-                  style={{
-                    fontFamily: fonts.bold,
-                    fontSize: 13,
-                    color: colors.textPrimary,
-                  }}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`View ${stay.title}`}
+                  onPress={() => handleSearchNavigation(stay.title, "stay_card")}
+                  style={({ pressed }) => ({
+                    width: "100%",
+                    height: 240,
+                    borderRadius: 24,
+                    overflow: "hidden",
+                    position: "relative",
+                    backgroundColor: colors.surfaceGray,
+                    transform: [{ scale: pressed ? 0.985 : 1 }],
+                  })}
                 >
-                  {stay.rating}
-                </Text>
-              </View>
-              <View
-                style={{
-                  position: "absolute",
-                  bottom: 16,
-                  left: 16,
-                  right: 16,
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "flex-end",
-                }}
-              >
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text
+                  <Image
+                    source={{ uri: stay.imageUrl }}
+                    style={{ width: "100%", height: "100%", position: "absolute" }}
+                    resizeMode="cover"
+                  />
+                  <View
                     style={{
-                      fontFamily: fonts.medium,
-                      fontSize: 12,
-                      color: "#FFFFFF",
+                      position: "absolute",
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      height: "55%",
+                      backgroundColor: "rgba(0, 0, 0, 0.45)",
+                    }}
+                  />
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: 14,
+                      right: 14,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 4,
+                      backgroundColor: "#FFFFFF",
+                      paddingVertical: 4,
+                      paddingHorizontal: 10,
+                      borderRadius: radius.full,
                     }}
                   >
-                    📍 {stay.location}
-                  </Text>
-                  <Text
+                    <Ionicons name="star" size={13} color="#0B0B1A" />
+                    <Text
+                      style={{
+                        fontFamily: fonts.bold,
+                        fontSize: 13,
+                        color: colors.textPrimary,
+                      }}
+                    >
+                      {stay.rating?.toFixed(1) || "4.9"}
+                    </Text>
+                  </View>
+                  <View
                     style={{
-                      fontFamily: fonts.bold,
-                      fontSize: 20,
-                      color: "#FFFFFF",
+                      position: "absolute",
+                      bottom: 16,
+                      left: 16,
+                      right: 16,
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "flex-end",
                     }}
                   >
-                    {stay.title}
-                  </Text>
-                </View>
-                <Text
-                  style={{
-                    fontFamily: fonts.bold,
-                    fontSize: 15,
-                    color: "#FFFFFF",
-                  }}
-                >
-                  ${stay.pricePerNight}{" "}
-                  <Text style={{ fontFamily: fonts.regular, fontSize: 12 }}>/ night</Text>
-                </Text>
-              </View>
-            </Pressable>
-          </Animated.View>
-        ))}
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text
+                        style={{
+                          fontFamily: fonts.medium,
+                          fontSize: 12,
+                          color: "#FFFFFF",
+                        }}
+                      >
+                        📍 {locText}
+                      </Text>
+                      <Text
+                        style={{
+                          fontFamily: fonts.bold,
+                          fontSize: 20,
+                          color: "#FFFFFF",
+                        }}
+                      >
+                        {stay.title}
+                      </Text>
+                    </View>
+                    <Text
+                      style={{
+                        fontFamily: fonts.bold,
+                        fontSize: 15,
+                        color: "#FFFFFF",
+                      }}
+                    >
+                      ${stay.pricePerNight}{" "}
+                      <Text style={{ fontFamily: fonts.regular, fontSize: 12 }}>/ night</Text>
+                    </Text>
+                  </View>
+                </Pressable>
+              </Animated.View>
+            );
+          })}
       </ScrollView>
     </View>
   );

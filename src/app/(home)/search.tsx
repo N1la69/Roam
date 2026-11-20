@@ -11,6 +11,7 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { colors, fonts, radius, spacing } from "@/theme";
+import { posthog } from "@/lib/posthog";
 import {
   InputField,
   FilterChip,
@@ -37,8 +38,20 @@ export default function SearchScreen() {
   }, [query, selectedCategory]);
 
   const handleClear = () => {
+    posthog?.capture("search_filters_cleared", { reset_type: "all" });
     setQuery("");
     setSelectedCategory("All");
+  };
+
+  const handleCategoryChange = (category: PropertyCategory) => {
+    if (category === selectedCategory) return;
+    posthog?.capture("search_category_selected", { category });
+    setSelectedCategory(category);
+  };
+
+  const handleQueryClear = () => {
+    posthog?.capture("search_filters_cleared", { reset_type: "query" });
+    setQuery("");
   };
 
   return (
@@ -105,7 +118,7 @@ export default function SearchScreen() {
           leftIcon={<Feather name="search" size={20} color={colors.textPrimary} />}
           rightIcon={
             query ? (
-              <Pressable onPress={() => setQuery("")} hitSlop={8}>
+              <Pressable onPress={handleQueryClear} hitSlop={8}>
                 <Feather name="x" size={18} color={colors.textSecondary} />
               </Pressable>
             ) : (
@@ -125,7 +138,7 @@ export default function SearchScreen() {
               key={cat.id}
               label={cat.label}
               active={selectedCategory === cat.id}
-              onPress={() => setSelectedCategory(cat.id)}
+              onPress={() => handleCategoryChange(cat.id)}
             />
           ))}
         </ScrollView>

@@ -1,6 +1,6 @@
 import "../../global.css";
-import { useEffect } from "react";
-import { Stack } from "expo-router";
+import { useEffect, useRef } from "react";
+import { Stack, usePathname } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import {
   useFonts,
@@ -11,8 +11,10 @@ import {
   PlusJakartaSans_800ExtraBold,
 } from "@expo-google-fonts/plus-jakarta-sans";
 import { Feather, Ionicons, FontAwesome, FontAwesome5, MaterialIcons } from "@expo/vector-icons";
-import { ClerkProvider } from "@clerk/expo";
+import { ClerkProvider, useUser } from "@clerk/expo";
 import { tokenCache } from "@clerk/expo/token-cache";
+import { PostHogProvider } from "posthog-react-native";
+import { posthog } from "@/lib/posthog";
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
 
@@ -22,7 +24,42 @@ if (!publishableKey) {
 
 SplashScreen.preventAutoHideAsync();
 
+function PostHogIdentity() {
+  const { isLoaded, user } = useUser();
+  const identifiedUserId = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (!isLoaded) {
+      return;
+    }
+
+    if (!user?.id) {
+      identifiedUserId.current = undefined;
+      return;
+    }
+
+    if (identifiedUserId.current === user.id) {
+      return;
+    }
+
+    posthog?.identify(user.id, {
+      $set: {
+        ...(user.primaryEmailAddress?.emailAddress
+          ? { email: user.primaryEmailAddress.emailAddress }
+          : {}),
+        ...(user.firstName ? { first_name: user.firstName } : {}),
+        ...(user.lastName ? { last_name: user.lastName } : {}),
+        ...(user.fullName ? { name: user.fullName } : {}),
+      },
+    });
+    identifiedUserId.current = user.id;
+  }, [isLoaded, user]);
+
+  return null;
+}
+
 export default function RootLayout() {
+  const pathname = usePathname();
   const [loaded, error] = useFonts({
     PlusJakartaSans_400Regular,
     PlusJakartaSans_500Medium,
@@ -42,12 +79,17 @@ export default function RootLayout() {
     }
   }, [loaded, error]);
 
+  useEffect(() => {
+    posthog?.screen(pathname);
+  }, [pathname]);
+
   if (!loaded && !error) {
     return null;
   }
 
-  return (
+  const app = (
     <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
+      <PostHogIdentity />
       <Stack
         screenOptions={{
           headerShown: false,
@@ -56,4 +98,10 @@ export default function RootLayout() {
       />
     </ClerkProvider>
   );
+
+  return posthog ? (
+    <PostHogProvider client={posthog} autocapture={{ captureScreens: false }}>
+      {app}
+    </PostHogProvider>
+  ) : app;
 }

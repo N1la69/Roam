@@ -13,6 +13,7 @@ import { useRouter, Href } from "expo-router";
 import { useSignIn } from "@clerk/expo";
 import { Feather } from "@expo/vector-icons";
 import { colors, fonts, spacing } from "@/theme";
+import { posthog } from "@/lib/posthog";
 import {
   Button,
   StackedInputField,
@@ -57,6 +58,7 @@ export default function SignInScreen() {
               router.replace("/(home)" as Href);
             },
           });
+          posthog?.capture("sign_in_completed", { method: "password" });
           setLoading(false);
           return;
         }
