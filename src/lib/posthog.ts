@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import Constants from "expo-constants";
 import PostHog from "posthog-react-native";
 
@@ -28,6 +29,27 @@ export const posthog =
     ? new PostHog(projectToken, {
         host,
         captureAppLifecycleEvents: true,
+        customStorage:
+          Platform.OS === "web"
+            ? {
+                getItem: (key: string) => {
+                  try {
+                    return typeof window !== "undefined"
+                      ? window.localStorage.getItem(key)
+                      : null;
+                  } catch {
+                    return null;
+                  }
+                },
+                setItem: (key: string, value: string) => {
+                  try {
+                    if (typeof window !== "undefined") {
+                      window.localStorage.setItem(key, value);
+                    }
+                  } catch {}
+                },
+              }
+            : undefined,
         logs: {
           serviceName: "roam-mobile",
           environment: __DEV__ ? "development" : "production",
@@ -39,9 +61,9 @@ export const posthog =
             unhandledRejections: true,
           },
         },
-        debug: __DEV__,
       })
     : undefined;
 
 // Only purpose-written calls through this logger are exported as PostHog logs.
 export const posthogLogger = posthog?.logger;
+

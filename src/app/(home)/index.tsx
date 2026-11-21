@@ -628,7 +628,7 @@ export default function HomeScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`View ${featuredStay.title}`}
-            onPress={() => handleSearchNavigation(featuredStay.title, "featured_stay")}
+            onPress={() => router.push(("/stay/" + featuredStay._id) as any)}
             style={({ pressed }) => ({
               width: "100%",
               height: 380,
@@ -775,7 +775,7 @@ export default function HomeScreen() {
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`View ${stay.title}`}
-                  onPress={() => handleSearchNavigation(stay.title, "stay_card")}
+                  onPress={() => router.push(("/stay/" + stay._id) as any)}
                   style={({ pressed }) => ({
                     width: "100%",
                     height: 240,

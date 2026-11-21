@@ -17,3 +17,4 @@ export * from "./GlassTabBar";
 export * from "./ArrowRightIcon";
 export * from "./GoogleIcon";
 export * from "./AppleIcon";
+export * from "./PolicyModal";

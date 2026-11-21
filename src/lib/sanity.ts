@@ -21,6 +21,29 @@ export interface SanityLocation {
   }
 }
 
+export interface SanityHost {
+  name: string
+  slug?: {current: string}
+  avatarUrl?: string
+  bio?: string
+  isSuperhost?: boolean
+  rating?: number
+  reviewsCount?: number
+  responseRate?: string
+  responseTime?: string
+  joinedDate?: string
+}
+
+export interface SanityPolicy {
+  _id: string
+  title: string
+  slug?: {current: string}
+  policyType: 'cancellation' | 'house_rules' | 'check_in' | 'safety' | 'pet_policy'
+  summary: string
+  content: string
+  icon?: string
+}
+
 export interface SanityProperty {
   _id: string
   title: string
@@ -46,6 +69,12 @@ export interface SanityProperty {
   checkOutTime?: string
   imageUrl: string
   galleryUrls?: string[]
+}
+
+export interface SanityPropertyDetail extends SanityProperty {
+  staySpecificRules?: string[]
+  host?: SanityHost
+  policies?: SanityPolicy[]
 }
 
 /**
