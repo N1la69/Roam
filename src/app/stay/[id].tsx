@@ -755,7 +755,7 @@ export default function StayDetailsScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Ask about policies"
-            onPress={() => openPolicies("house_rules")}
+            onPress={() => router.push(("/stay/" + stay._id + "/ask") as any)}
             style={({ pressed }) => ({
               flexDirection: "row",
               alignItems: "center",
